@@ -16,6 +16,8 @@ app.use(cors());
 
 
 
+
+
 const signup = async (req, res) => {
   try {
     const { username, email, phone, password, confirmPassword, country } = req.body;
@@ -69,4 +71,40 @@ const signup = async (req, res) => {
   }
 };
 
-module.exports = { signup };
+
+const allUser = async (req, res) => {
+  try {
+    const users = await User.find(); // সব ইউজার ফেচ হবে
+    res.json(users);
+  } catch (err) {
+    console.error("Error fetching users:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const updateBalance = async (req, res) => {
+  try {
+    const { defaultWalletBalance, profitBalance } = req.body;
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (defaultWalletBalance !== undefined) {
+      user.defaultWalletBalance = defaultWalletBalance;
+    }
+    if (profitBalance !== undefined) {
+      user.profitBalance = profitBalance;
+    }
+
+    await user.save();
+    res.json({ message: "User balance updated", user });
+  } catch (err) {
+    console.error("Update error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+
+
+module.exports = { signup, allUser, updateBalance };

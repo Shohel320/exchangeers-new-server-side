@@ -1,5 +1,5 @@
 // controllers/userController.js
-const User = require('../models/User');
+const User = require('../models/user');
 const Deposit = require('../models/Deposit');
 
 exports.createDeposit = async (req, res) => {
