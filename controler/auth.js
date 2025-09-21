@@ -105,6 +105,36 @@ const updateBalance = async (req, res) => {
 };
 
 
+ const updateNewBalance =  async (req, res) => {
+  try {
+    const { balance } = req.body; // ফ্রন্টএন্ড থেকে নতুন balance আসবে
+    const userId = req.user.id;   // টোকেন থেকে ইউজারের আইডি
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // ✅ ডিফল্ট ওয়ালেট ব্যালেন্স আপডেট
+    user.defaultWalletBalance = balance;
+
+    // ✅ চাইলে Profit Balance ও আপডেট করতে পারেন
+    // user.profitBalance = user.profitBalance + (balance - পুরানোBalance);
+
+    await user.save();
+
+    res.json({
+      message: "Balance updated successfully",
+      defaultWalletBalance: user.defaultWalletBalance,
+      profitBalance: user.profitBalance,
+    });
+  } catch (err) {
+    console.error("Balance update error:", err);
+    res.status(500).json({ message: "Server error while updating balance" });
+  }
+};
 
 
-module.exports = { signup, allUser, updateBalance };
+
+
+module.exports = { signup, allUser, updateBalance, updateNewBalance };

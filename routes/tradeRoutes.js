@@ -2,6 +2,8 @@ const express = require('express');
 const Trade = require('../models/Trade');
 const axios = require('axios');
 const { subscribeToPair } = require('../Services/PriceBridge');
+const User = require('../models/user');
+
 
 const router = express.Router();
 
@@ -45,11 +47,11 @@ router.post('/close/:id', async (req, res) => {
     if (!trade) return res.status(404).json({ message: 'Trade not found' });
     if (trade.status === 'CLOSED') return res.status(400).json({ message: 'Trade already closed' });
 
-    // Get current market price
+    // Binance থেকে Live Price ফেচ করা
     const response = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${trade.pair}`);
     const closePrice = parseFloat(response.data.price);
 
-    // Calculate final PnL
+    // ✅ Profit/Loss Percent হিসাব
     let profitLossPercent = 0;
     if (trade.direction === 'LONG') {
       profitLossPercent = ((closePrice - trade.entryPrice) / trade.entryPrice) * 100;
@@ -59,19 +61,32 @@ router.post('/close/:id', async (req, res) => {
 
     const profitLossUSDT = (profitLossPercent / 100) * trade.quantity;
 
+    // ✅ Trade এ Save করা
     trade.status = 'CLOSED';
     trade.closePrice = closePrice;
     trade.profitLossPercent = profitLossPercent.toFixed(2);
     trade.profitLossUSDT = profitLossUSDT.toFixed(2);
-
     await trade.save();
 
-    res.json({ message: 'Trade closed successfully', trade });
+    // ✅ সব ইউজারের ব্যালেন্স আপডেট করা
+    const users = await User.find();
+    for (let user of users) {
+      const wallet = user.defaultWalletBalance || 0;
+      const change = (wallet * profitLossPercent) / 100; // শতাংশ অনুযায়ী পরিবর্তন
+      user.defaultWalletBalance = wallet + change;
+      await user.save();
+    }
+
+    res.json({ 
+      message: 'Trade closed successfully and all user balances updated', 
+      trade, 
+      profitLossPercent 
+    });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: err.message });
   }
 });
-
 // ✅ 3. Get All Trades (User View)
 router.get('/', async (req, res) => {
   try {
