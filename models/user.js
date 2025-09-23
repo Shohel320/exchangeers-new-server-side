@@ -46,7 +46,8 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   },
 
-   agent: { type: mongoose.Schema.Types.ObjectId, ref: "Agent", default: null },
+    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: "Agent", default: null },
+
 });
 
 // Optional: virtuals to return safe user object

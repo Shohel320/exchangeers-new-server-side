@@ -1,8 +1,9 @@
+const mongoose = require('mongoose');
+
 const agentSchema = new mongoose.Schema({
   name: String,
   email: String,
   password: String,
-  confirmPassword: String,
   phone: String,
   country: String,
   referralCode: { type: String, unique: true }, // প্রতিটি এজেন্টের আলাদা কোড

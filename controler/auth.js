@@ -5,6 +5,7 @@ const User = require('../models/user');
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const Agent = require('../models/agent')
 
 
 const app = express();
@@ -20,7 +21,7 @@ app.use(cors());
 
 const signup = async (req, res) => {
   try {
-    const { username, email, phone, password, confirmPassword, country } = req.body;
+    const { username, email, phone, password, confirmPassword, country, referralCode  } = req.body;
 
     // confirm password check (important)
     if (password !== confirmPassword) {
@@ -41,6 +42,15 @@ const signup = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+
+    let referredBy = null;
+    if (referralCode) {
+      const agent = await Agent.findOne({ referralCode });
+      if (agent) {
+        referredBy = agent._id; // শুধু সম্পর্ক তৈরি হবে
+      }
+    }
+
     // create user with default balances 0
     const user = new User({
       username,
@@ -49,7 +59,8 @@ const signup = async (req, res) => {
       passwordHash,
       country: country || '',
       defaultWalletBalance: 0,
-      profitBalance: 0
+      profitBalance: 0,
+      referredBy
     });
 
     await user.save();
