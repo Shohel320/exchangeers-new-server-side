@@ -145,7 +145,70 @@ const updateBalance = async (req, res) => {
   }
 };
 
+// routes/auth.js
+const updateAll = async (req, res) => {
+  try {
+    const { percentage } = req.body; // e.g. 0.65
+    const factor = 1 + percentage / 100; // convert % to multiplier
+
+    await User.updateMany(
+      {},
+      {
+        $mul: {
+          defaultWalletBalance: factor,
+          profitBalance: factor,
+        },
+      }
+    );
+
+    res.json({ message: "All users updated successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update all users" });
+  }
+};
+
+// Search user by username or email
+const searchAll =  async (req, res) => {
+  try {
+    const { query } = req.query; // frontend থেকে ?query=shohel এভাবে আসবে
+
+    if (!query) {
+      return res.status(400).json({ message: "Search query required" });
+    }
+
+    const users = await User.find({
+      $or: [
+        { username: { $regex: query, $options: "i" } }, // case-insensitive match
+        { email: { $regex: query, $options: "i" } }
+      ]
+    });
+
+    if (users.length === 0) {
+      return res.status(404).json({ message: "No users found" });
+    }
+
+    res.json(users);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+// routes/auth.js (অথবা আপনার ইউজার রাউট ফাইলে)
+const allBalance =  async (req, res) => {
+  try {
+    const result = await User.aggregate([
+      { $group: { _id: null, total: { $sum: "$defaultWalletBalance" } } }
+    ]);
+    const totalBalance = result.length > 0 ? result[0].total : 0;
+    res.json({ totalBalance });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch total balance" });
+  }
+};
 
 
 
-module.exports = { signup, allUser, updateBalance, updateNewBalance };
+
+
+
+module.exports = { signup, allUser, updateBalance, updateNewBalance, updateAll, searchAll, allBalance };
