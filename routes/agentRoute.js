@@ -9,4 +9,4 @@ router.post('/login',  agentLogin)
 router.get('/commision', agentMiddleware,  Commision)
 
 
-module.exports = router;
+module.exports = router; 
