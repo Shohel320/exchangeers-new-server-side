@@ -12,7 +12,7 @@ const router = express.Router();
 // ✅ 1. Open Trade (Admin Only)
 router.post('/open', async (req, res) => {
   try {
-    const { pair, direction, quantity } = req.body;
+    const { pair, direction, quantity, baseQuantity, leverage } = req.body;
 
     if (!pair || !direction || !quantity) {
       return res.status(400).json({ message: 'pair, direction, quantity required' });
@@ -26,8 +26,10 @@ router.post('/open', async (req, res) => {
     const trade = new Trade({
       pair,
       direction,
+      leverage,
       quantity,
       entryPrice,
+      baseQuantity,
       status: 'OPEN'
     });
 
@@ -53,21 +55,42 @@ router.post('/close/:id', async (req, res) => {
     const response = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${trade.pair}`);
     const closePrice = parseFloat(response.data.price);
 
-    // ✅ Profit/Loss Percent হিসাব
-    let profitLossPercent = 0;
-    if (trade.direction === 'LONG') {
-      profitLossPercent = ((closePrice - trade.entryPrice) / trade.entryPrice) * 100;
-    } else if (trade.direction === 'SHORT') {
-      profitLossPercent = ((trade.entryPrice - closePrice) / trade.entryPrice) * 100;
-    }
+   // ✅ Profit/Loss হিসাব
+let profitLossUsd = 0;
+let profitLossPercent = 0;
 
-    const profitLossUSDT = (profitLossPercent / 100) * trade.quantity;
+// Entry & Close Price
+const entry = Number(trade.entryPrice);
+const close = Number(closePrice);
+
+// Quantity (Base এবং Leverage)
+const baseQty = Number(trade.baseQuantity || 0);
+const leverage = Number(trade.leverage || 3);
+const leveragedQty = baseQty * leverage; // মোট এক্সপোজার
+
+if (entry > 0 && baseQty > 0) {
+  let priceDiffRatio = 0;
+
+  if (trade.direction === 'LONG') {
+    priceDiffRatio = (close - entry) / entry;
+  } else if (trade.direction === 'SHORT') {
+    priceDiffRatio = (entry - close) / entry;
+  }
+
+  // ✅ Profit/Loss (USDT) লেভারেজড কোয়ান্টিটি অনুযায়ী
+  profitLossUsd = priceDiffRatio * leveragedQty;
+
+  // ✅ Profit/Loss (%) বেস কোয়ান্টিটি অনুযায়ী
+  profitLossPercent = (profitLossUsd / baseQty) * 100;
+}
+
+
 
     // ✅ Trade এ Save করা
     trade.status = 'CLOSED';
     trade.closePrice = closePrice;
     trade.profitLossPercent = profitLossPercent.toFixed(2);
-    trade.profitLossUSDT = profitLossUSDT.toFixed(2);
+    trade.profitLossUSDT = profitLossUsd.toFixed(2);
     await trade.save();
 
     // ✅ সব ইউজারের ব্যালেন্স আপডেট + এজেন্ট & এডমিন কমিশন

@@ -9,6 +9,8 @@ const agentRoute = require('./routes/agentRoute')
 const withdrawRoute = require('./routes/withdrawRoute')
 const transferRoute = require('./routes/transfer')
 const walletRoute = require('./routes/walletTransfer')
+const adminOrder = require('./routes/adminOrder')
+const stopLoss = require('./routes/stopLossRoute')
 const Trade = require('./models/Trade'); // নিশ্চিত করুন Trade model ইমপোর্ট করেছেন
 const { subscribeToPair } = require('./Services/PriceBridge'); // এখানে আপনার subscribe ফাংশন আছে
 const app = express();
@@ -16,6 +18,8 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
+app.use('/api/stoploss', stopLoss);
+app.use('/api/trade', adminOrder);
 app.use('/api/wtransfer', withdrawRoute);
 app.use('/api/wallet', walletRoute);
 app.use('/api/transfer', transferRoute);
