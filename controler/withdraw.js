@@ -5,7 +5,7 @@ const User = require("../models/user");
 // Create transfer request
 const WithdrawTransferFund = async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { amount, accountNumber, paymentMethod, notes, username, email, } = req.body;
     const user = await User.findById(req.user.id);
 
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -17,6 +17,11 @@ const WithdrawTransferFund = async (req, res) => {
     const Withdrawtransfer = new WithdrawWalletTransferRequest({
       userId: user._id,
       amount,
+      accountNumber,
+      paymentMethod,
+      notes,
+      username,
+      email,
       status: "pending",
     });
 

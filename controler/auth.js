@@ -19,6 +19,9 @@ app.use(cors());
 
 
 
+
+
+
 const signup = async (req, res) => {
   try {
     const { username, email, phone, password, confirmPassword, country, referralCode  } = req.body;
@@ -81,6 +84,19 @@ const signup = async (req, res) => {
     return res.status(500).json({ message: 'Server error' });
   }
 };
+
+
+const userProfile = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json(user);
+  } catch (error) {
+    console.error("Profile fetch error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 
 
 const allUser = async (req, res) => {
@@ -211,4 +227,4 @@ const allBalance =  async (req, res) => {
 
 
 
-module.exports = { signup, allUser, updateBalance, updateNewBalance, updateAll, searchAll, allBalance };
+module.exports = { signup, allUser, userProfile, updateBalance, updateNewBalance, updateAll, searchAll, allBalance };

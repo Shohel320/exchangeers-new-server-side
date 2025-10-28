@@ -4,7 +4,8 @@ const axios = require('axios');
 const { subscribeToPair } = require('../Services/PriceBridge');
 const User = require('../models/user');
 const Agent = require('../models/agent')
-const AdminCommission = require('../models/AdminCommission')
+const AdminCommission = require('../models/AdminCommission');
+const TransactionHistory  = require('../models/userTradeHistory')
 
 
 const router = express.Router();
@@ -94,57 +95,81 @@ if (entry > 0 && baseQty > 0) {
     await trade.save();
 
     // ✅ সব ইউজারের ব্যালেন্স আপডেট + এজেন্ট & এডমিন কমিশন
-    const users = await User.find().populate("referredBy"); 
-    for (let user of users) {
-      const walletBefore = user.defaultWalletBalance || 0;
+    // ✅ সব ইউজারের ব্যালেন্স আপডেট + এজেন্ট & এডমিন কমিশন
+const users = await User.find().populate("referredBy");
 
-      // মোট পরিবর্তন
-      const change = (walletBefore * profitLossPercent) / 100;
+for (let user of users) {
+  const walletBefore = user.defaultWalletBalance || 0;
+  const change = (walletBefore * profitLossPercent) / 100;
 
-      if (change > 0) {
-        // কমিশন হিসাব
-        const agentCommission = (change * 5) / 100;
-        const adminCommission = (change * 15) / 100;
-        const userNetProfit = change - (agentCommission + adminCommission);
+  if (change > 0) {
+    // কমিশন হিসাব
+    const agentCommission = (change * 5) / 100;
+    const adminCommission = (change * 15) / 100;
+    const userNetProfit = change - (agentCommission + adminCommission);
 
-        // ✅ ইউজারের ওয়ালেট আপডেট (কমিশন বাদ দিয়ে)
-        user.defaultWalletBalance = walletBefore + userNetProfit;
-        await user.save();
+    // ✅ ইউজারের ওয়ালেট আপডেট
+    user.defaultWalletBalance = walletBefore + userNetProfit;
+    await user.save();
 
-        // ✅ এজেন্ট কমিশন
-        if (user.referredBy) {
-          const agent = await Agent.findById(user.referredBy);
-          if (agent) {
-            agent.commissionBalance = (agent.commissionBalance || 0) + agentCommission;
-            await agent.save();
-          }
-        }
+    // ✅ একসাথে TransactionHistory এ সব ইনফো সেভ
+    await TransactionHistory.create({
+      userId: user._id,
+      tradeId: trade._id,
+      type: "PROFIT",
+      amount: userNetProfit,
+      agentCommission: agentCommission,
+      adminCommission: adminCommission,
+      balanceAfter: user.defaultWalletBalance,
+      description: `Trade profit: ${userNetProfit.toFixed(2)} | Agent: ${agentCommission.toFixed(2)} | Admin: ${adminCommission.toFixed(2)}`,
+    });
 
-        // ✅ এডমিন কমিশন
-       let admin = await AdminCommission.findOne();
-      if (!admin) {
-       admin = new AdminCommission({ totalCommission: 0, history: [] });
-       }
-
-         admin.totalCommission += adminCommission;
-         admin.history.push({
-          amount: adminCommission,
-         fromUser: user._id,
-         tradeId: trade._id
-       });
-      await admin.save();
-      } else {
-        // লস হলে সরাসরি ইউজারের ওয়ালেট থেকে কাটা হবে
-        user.defaultWalletBalance = walletBefore + change;
-        await user.save();
+    // ✅ এজেন্ট কমিশন আলাদা আপডেট (Agent Table)
+    if (user.referredBy) {
+      const agent = await Agent.findById(user.referredBy);
+      if (agent) {
+        agent.commissionBalance = (agent.commissionBalance || 0) + agentCommission;
+        await agent.save();
       }
     }
 
-    res.json({ 
-      message: 'Trade closed successfully, balances & commissions updated', 
-      trade, 
-      profitLossPercent 
+    // ✅ এডমিন কমিশন আলাদা আপডেট (Admin Table)
+    let admin = await AdminCommission.findOne();
+    if (!admin) {
+      admin = new AdminCommission({ totalCommission: 0, history: [] });
+    }
+    admin.totalCommission += adminCommission;
+    admin.history.push({
+      amount: adminCommission,
+      fromUser: user._id,
+      tradeId: trade._id,
     });
+    await admin.save();
+
+  } else {
+    // 🔻 LOSS
+    user.defaultWalletBalance = walletBefore + change;
+    await user.save();
+
+    await TransactionHistory.create({
+      userId: user._id,
+      tradeId: trade._id,
+      type: "LOSS",
+      amount: change,
+      balanceAfter: user.defaultWalletBalance,
+      agentCommission: 0,
+      adminCommission: 0,
+      description: `Trade loss deducted.`,
+    });
+  }
+}
+
+res.json({
+  message: 'Trade closed successfully, balances & commissions updated',
+  trade,
+  profitLossPercent
+});
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message });

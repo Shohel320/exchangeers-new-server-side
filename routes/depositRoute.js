@@ -7,14 +7,50 @@ const User = require("../models/user");
 // ✅ ইউজার ডিপোজিট রিকোয়েস্ট পাঠাবে
 router.post("/request", authMiddleware, async (req, res) => {
   try {
-    const { amount } = req.body;
-    if (!amount || amount <= 0) return res.status(400).json({ message: "Invalid amount" });
+    const {
+      amount,
+      userNumber,
+      paymentMethod,
+      customField,
+      username,
+      email,
+      transactionId,
+    } = req.body;
 
-    const deposit = await Deposit.create({ user: req.user._id, amount, status: "PENDING" });
-    res.status(201).json({ message: "Deposit request created", deposit });
+    // 🧾 ইনপুট যাচাই
+    if (!amount || amount <= 0)
+      return res.status(400).json({ message: "Invalid amount" });
+
+    if (
+      !userNumber ||
+      !paymentMethod ||
+      !customField ||
+      !username ||
+      !email ||
+      !transactionId
+    ) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    // 🧠 নতুন ডিপোজিট তৈরি
+    const deposit = await Deposit.create({
+      user: req.user._id, // ✅ authMiddleware থেকে আসবে
+      amount,
+      userNumber,
+      paymentMethod,
+      customField,
+      username,
+      email,
+      transactionId,
+      status: "PENDING",
+    });
+
+    res
+      .status(201)
+      .json({ success: true, message: "Deposit request created", deposit });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Deposit request error:", err);
+    res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 });
 
