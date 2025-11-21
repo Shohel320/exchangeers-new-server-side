@@ -20,7 +20,7 @@ router.post('/open', async (req, res) => {
     }
 
     // Get live price from Binance REST API
-    const response = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${pair}`);
+    const response = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${pair}`);
     const entryPrice = parseFloat(response.data.price);
 
     // Create Trade
@@ -53,7 +53,7 @@ router.post('/close/:id', async (req, res) => {
     if (trade.status === 'CLOSED') return res.status(400).json({ message: 'Trade already closed' });
 
     // Binance থেকে Live Price ফেচ
-    const response = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${trade.pair}`);
+    const response = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${trade.pair}`);
     const closePrice = parseFloat(response.data.price);
 
    // ✅ Profit/Loss হিসাব
@@ -103,48 +103,58 @@ for (let user of users) {
   const change = (walletBefore * profitLossPercent) / 100;
 
   if (change > 0) {
-    // কমিশন হিসাব
-    const agentCommission = (change * 5) / 100;
-    const adminCommission = (change * 15) / 100;
-    const userNetProfit = change - (agentCommission + adminCommission);
+  let agentCommission = 0;
+  let adminCommission = 0;
 
-    // ✅ ইউজারের ওয়ালেট আপডেট
-    user.defaultWalletBalance = walletBefore + userNetProfit;
-    await user.save();
+  if (user.referredBy) {
+    // 🔹 রেফারড ইউজারের ক্ষেত্রে
+    agentCommission = (change * 5) / 100;
+    adminCommission = (change * 15) / 100;
+  } else {
+    // 🔹 রেফারড না থাকলে
+    agentCommission = 0;
+    adminCommission = (change * 20) / 100;
+  }
 
-    // ✅ একসাথে TransactionHistory এ সব ইনফো সেভ
-    await TransactionHistory.create({
-      userId: user._id,
-      tradeId: trade._id,
-      type: "PROFIT",
-      amount: userNetProfit,
-      agentCommission: agentCommission,
-      adminCommission: adminCommission,
-      balanceAfter: user.defaultWalletBalance,
-      description: `Trade profit: ${userNetProfit.toFixed(2)} | Agent: ${agentCommission.toFixed(2)} | Admin: ${adminCommission.toFixed(2)}`,
-    });
+  const userNetProfit = change - (agentCommission + adminCommission);
 
-    // ✅ এজেন্ট কমিশন আলাদা আপডেট (Agent Table)
-    if (user.referredBy) {
-      const agent = await Agent.findById(user.referredBy);
-      if (agent) {
-        agent.commissionBalance = (agent.commissionBalance || 0) + agentCommission;
-        await agent.save();
-      }
+  // ✅ ইউজারের ওয়ালেট আপডেট
+  user.defaultWalletBalance = walletBefore + userNetProfit;
+  await user.save();
+
+  // ✅ TransactionHistory এ সেভ
+  await TransactionHistory.create({
+    userId: user._id,
+    tradeId: trade._id,
+    type: "PROFIT",
+    amount: userNetProfit,
+    agentCommission,
+    adminCommission,
+    balanceAfter: user.defaultWalletBalance,
+    description: `Trade profit: ${userNetProfit.toFixed(2)} | Agent: ${agentCommission.toFixed(2)} | Admin: ${adminCommission.toFixed(2)}`,
+  });
+
+  // ✅ এজেন্ট কমিশন (যদি থাকে)
+  if (user.referredBy && agentCommission > 0) {
+    const agent = await Agent.findById(user.referredBy);
+    if (agent) {
+      agent.commissionBalance = (agent.commissionBalance || 0) + agentCommission;
+      await agent.save();
     }
+  }
 
-    // ✅ এডমিন কমিশন আলাদা আপডেট (Admin Table)
-    let admin = await AdminCommission.findOne();
-    if (!admin) {
-      admin = new AdminCommission({ totalCommission: 0, history: [] });
-    }
-    admin.totalCommission += adminCommission;
-    admin.history.push({
-      amount: adminCommission,
-      fromUser: user._id,
-      tradeId: trade._id,
-    });
-    await admin.save();
+  // ✅ এডমিন কমিশন আপডেট
+  let admin = await AdminCommission.findOne();
+  if (!admin) {
+    admin = new AdminCommission({ totalCommission: 0, history: [] });
+  }
+  admin.totalCommission += adminCommission;
+  admin.history.push({
+    amount: adminCommission,
+    fromUser: user._id,
+    tradeId: trade._id,
+  });
+  await admin.save();
 
   } else {
     // 🔻 LOSS
