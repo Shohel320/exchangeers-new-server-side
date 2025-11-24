@@ -1,4 +1,5 @@
 // controllers/authController.js
+require("dotenv").config();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
@@ -6,6 +7,8 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const Agent = require('../models/agent')
+const nodemailer = require('nodemailer');
+
 
 
 const app = express();
@@ -22,16 +25,14 @@ app.use(cors());
 
 
 
-const signup = async (req, res) => {
+  const signup = async (req, res) => {
   try {
-    const { username, email, phone, password, confirmPassword, country, referralCode  } = req.body;
+    const { username, email, phone, password, confirmPassword, country, referralCode } = req.body;
 
-    // confirm password check (important)
     if (password !== confirmPassword) {
       return res.status(400).json({ message: 'Password and confirmPassword do not match' });
     }
 
-    // check existing account by email/username/phone
     const existingEmail = await User.findOne({ email: email.toLowerCase() });
     if (existingEmail) return res.status(400).json({ message: 'Email already in use' });
 
@@ -41,20 +42,16 @@ const signup = async (req, res) => {
     const existingPhone = await User.findOne({ phone });
     if (existingPhone) return res.status(400).json({ message: 'Phone already in use' });
 
-    // hash password
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
-
 
     let referredBy = null;
     if (referralCode) {
       const agent = await Agent.findOne({ referralCode });
-      if (agent) {
-        referredBy = agent._id; // শুধু সম্পর্ক তৈরি হবে
-      }
+      if (agent) referredBy = agent._id;
     }
 
-    // create user with default balances 0
+    // Create the user
     const user = new User({
       username,
       email: email.toLowerCase(),
@@ -66,24 +63,91 @@ const signup = async (req, res) => {
       referredBy
     });
 
+    // ----------- EMAIL VERIFY TOKEN (JWT) ---------------
+    const emailVerifyToken = jwt.sign(
+      { userId: user._id },
+      process.env.EMAIL_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    user.emailVerifyToken = emailVerifyToken;
+    user.emailVerifyTokenExpire = Date.now() + 24 * 60 * 60 * 1000;
+
     await user.save();
 
-    // Optionally create JWT token to return
-    const payload = { userId: user._id };
-    const token = jwt.sign(payload, process.env.JWT_SECRET || 'change_this_secret', {
-      expiresIn: '7d'
+    // ----------------- SEND VERIFICATION MAIL --------------------
+    const transporter = nodemailer.createTransport({
+      host: "mail.exchangeers.com",
+      port: 465,
+      secure: true,
+      auth: {
+        user: "support@exchangeers.com",
+        pass: process.env.MAIL_PASSWORD
+      },
+      tls: { rejectUnauthorized: false }
+    });
+
+    const verifyLink = `http://localhost:5173/verify-email?token=${encodeURIComponent(emailVerifyToken)}`;
+
+    await transporter.sendMail({
+      from: "support@exchangeers.com",
+      to: email,
+      subject: "Verify Your Email",
+      html: `
+        <h2>Welcome ${username}!</h2>
+        <p>Click the link below to verify your email:</p>
+        <a href="${verifyLink}" style="padding: 10px 15px; background:#28a745; color:white; text-decoration:none;">
+          Verify Email
+        </a>
+        <p>This link will expire in 24 hours.</p>
+      `
     });
 
     return res.status(201).json({
-      message: 'User created',
-      user: user.toSafeObject(),
-      token
+      message: 'User created. Verification email sent!',
+      user: user.toSafeObject()
     });
   } catch (err) {
     console.error('Signup error:', err);
     return res.status(500).json({ message: 'Server error' });
   }
 };
+
+//router.get("/verify-email", 
+  const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).send("Invalid link");
+
+    const decoded = jwt.verify(
+      token,
+      process.env.EMAIL_SECRET
+    );
+
+    const user = await User.findById(decoded.userId);
+    if (!user) return res.status(400).send("User not found");
+
+    if (user.emailVerified)
+      return res.status(200).send("Email verified successfully!");
+
+    if (user.emailVerifyToken !== token)
+      return res.status(400).send("Invalid or expired token");
+
+    // Verify now
+    user.emailVerified = true;
+    user.emailVerifyToken = null;
+    user.emailVerifyTokenExpire = null;
+    await user.save();
+
+    res.send("Email verified successfully!");
+  } catch (err) {
+    res.status(400).send("Verification failed or link expired");
+  }
+};
+
+
+
+
 
 
 const userProfile = async (req, res) => {
@@ -227,4 +291,4 @@ const allBalance =  async (req, res) => {
 
 
 
-module.exports = { signup, allUser, userProfile, updateBalance, updateNewBalance, updateAll, searchAll, allBalance };
+module.exports = { signup, verifyEmail, allUser, userProfile, updateBalance, updateNewBalance, updateAll, searchAll, allBalance };

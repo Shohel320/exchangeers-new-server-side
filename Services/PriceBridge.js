@@ -11,7 +11,7 @@ function subscribeToPair(pair) {
   const symbol = pair.toLowerCase();
 
   const connect = () => {
-    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol}@trade`);
+    const ws = new WebSocket(`wss://fstream.binance.com/ws/${symbol}@trade`);
 
     ws.on('open', () => {
       console.log(`${pair} WebSocket connected`);

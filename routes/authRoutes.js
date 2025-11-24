@@ -1,7 +1,7 @@
 // routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
-const { signup, allUser, updateBalance, updateNewBalance, updateAll, searchAll, allBalance } = require('../controler/auth');
+const { signup, allUser, updateBalance, verifyEmail, updateNewBalance, updateAll, searchAll, allBalance } = require('../controler/auth');
 const { signupValidators, runValidation } = require('../middleware/validation');
 const { login } = require('../controler/login')
 const  authMiddleware  = require ('../middleware/profileMiddleware');
@@ -23,6 +23,8 @@ router.post('/kyc/upload', authMiddleware, uploadMiddleware, kycUpload);
 router.get("/kyc/data", authMiddleware, kycData);
 router.get("/kyc/data/all", getAllKycRequests);
 router.put("/kyc/update/:kycId", updateKycStatus);
+router.get("/verify-email", verifyEmail);
+
 
 
 
