@@ -23,6 +23,7 @@ const AdminSupportRoute = require('./routes/adminSupportRoute');
 const SupportSocket = require('./socket/supportSocket');
 const { subscribeToPair } = require('./Services/PriceBridge');
 const path = require("path");
+const RevenueReport = require('./routes/revenue')
 
 const app = express();
 app.use(cors());
@@ -31,6 +32,8 @@ app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/revenue', RevenueReport);
+
 app.use('/api/password', ResetRoute);
 app.use('/api/support/admin', AdminSupportRoute);
 app.use('/api/support/user', UserSupport);

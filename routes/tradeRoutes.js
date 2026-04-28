@@ -51,10 +51,14 @@ router.post('/close/:id', async (req, res) => {
     const trade = await Trade.findById(req.params.id);
     if (!trade) return res.status(404).json({ message: 'Trade not found' });
     if (trade.status === 'CLOSED') return res.status(400).json({ message: 'Trade already closed' });
+     const { closePrice } = req.body;
 
-    // Binance থেকে Live Price ফেচ
-    const response = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${trade.pair}`);
-    const closePrice = parseFloat(response.data.price);
+    if (!closePrice || Number(closePrice) <= 0) {
+      return res
+        .status(400)
+        .json({ message: "Manual closing price is required" });
+    }
+  
 
    // ✅ Profit/Loss হিসাব
 let profitLossUsd = 0;
@@ -89,7 +93,7 @@ if (entry > 0 && baseQty > 0) {
 
     // ✅ Trade এ Save করা
     trade.status = 'CLOSED';
-    trade.closePrice = closePrice;
+    trade.closePrice = close;
     trade.profitLossPercent = profitLossPercent.toFixed(2);
     trade.profitLossUSDT = profitLossUsd.toFixed(2);
     await trade.save();
@@ -108,12 +112,12 @@ for (let user of users) {
 
   if (user.referredBy) {
     // 🔹 রেফারড ইউজারের ক্ষেত্রে
-    agentCommission = (change * 5) / 100;
-    adminCommission = (change * 15) / 100;
+    agentCommission = (change * 4) / 100;
+    adminCommission = (change * 17) / 100;
   } else {
     // 🔹 রেফারড না থাকলে
     agentCommission = 0;
-    adminCommission = (change * 20) / 100;
+    adminCommission = (change * 21) / 100;
   }
 
   const userNetProfit = change - (agentCommission + adminCommission);
